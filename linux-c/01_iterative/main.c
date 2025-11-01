@@ -363,13 +363,18 @@ int setup_listening_socket(int server_port)
     if (sock == -1) fatal_error("socket()");
 
     int enable = 1;
-    // set options on the socket fd
+    /*
+        If So_REUSEADDR is not set then if server is stopped and restarted immediately after having served atleast 1 client,
+        it won't bind back on port 8000 since any client connection will go into TIME_WAIT state while the OS waits
+        for any potential leftover data to be transferred. This will prevent quick restarts.
+        Use netstat to check out sockets in this state
+    */
     if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int)) < 0) fatal_error("setsockopt(SO_REUSEADDR)");
 
     // we bind this socket to this socket address
     if (bind(sock, (const struct sockaddr *)&srv_addr, sizeof(srv_addr)) < 0) fatal_error("bind()");
 
-    // turn this socket into a listening socket with request queue length
+    // turn this socket into a listening socket with queue lenght: no of clients that can wait untill their request is accepted
     if (listen(sock, 10) < 0) fatal_error("listen()");
 
     return sock;
@@ -457,7 +462,7 @@ void send_headers(const char* path, off_t len, int client_socket)
    sprintf(send_buffer, "content-length: %ld\r\n", len);
    send(client_socket, send_buffer, strlen(send_buffer), 0);
 
-   /* This signals browser there are no more headers. Content May follow */
+   /* This empty line with "\r\n" signals browser there are no more headers. Content May follow */
    strcpy(send_buffer, "\r\n");
    send(client_socket, send_buffer, strlen(send_buffer), 0);
 }
@@ -777,7 +782,7 @@ void handle_client(int client_socket)
         }
         else
         {
-            // end of request
+            // empty line with "/r/n" => end of request headers
             if (len == 0) break;
         }
     }
@@ -794,6 +799,7 @@ void enter_server_loop(int server_socket)
     socklen_t client_addr_len = sizeof(client_addr);
     while(1)
     {
+        // blocking call, returns client socket when a client connects on listening socket
         int client_socket = accept(server_socket, (struct sockaddr *)&client_addr, &client_addr_len);
         if (client_socket == -1) fatal_error("accept()");
 
