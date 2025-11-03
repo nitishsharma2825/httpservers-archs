@@ -7,9 +7,12 @@ forking: 02_forking/main.c
 preforked: 03_preforked/main.c
 	gcc -o $@ $<
 
-all: iterative
+threaded: 04_threaded/main.c
+	gcc -o $@ $<
+
+all: iterative forked preforked threaded
 
 .PHONY: clean
 
 clean:
-	rm -f iterative forking preforked
+	rm -f iterative forking preforked threaded
